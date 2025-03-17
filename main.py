@@ -21,16 +21,30 @@ def setup_logging(geojson_file):
     base_name = os.path.splitext(os.path.basename(geojson_file))[0]
     log_file = os.path.join(logs_dir, f"{base_name}.log")
     
-    # Set up logging configuration
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='[%(asctime)s] %(message)s',
-        datefmt='%H:%M:%S',
-        handlers=[
-            logging.FileHandler(log_file),
-            logging.StreamHandler()
-        ]
-    )
+    # Create logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)  # Set root logger to DEBUG
+    
+    # Create formatters
+    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%H:%M:%S')
+    
+    # File handler (DEBUG level)
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+    
+    # Console handler (INFO level)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    
+    # Remove any existing handlers
+    logger.handlers = []
+    
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
     logging.info(f"Logging initialized. Log file: {log_file}")
 
 def acquire_wakelock():
@@ -134,11 +148,6 @@ filename = create_filename()
 # Setup logging after we have the filename
 setup_logging(filename)
 
-# Set debug level if requested
-if args.debug:
-    logging.getLogger().setLevel(logging.DEBUG)
-    logging.debug("Debug logging enabled")
-
 # Acquire wakelock before starting
 if not acquire_wakelock():
     logging.warning("Could not acquire wakelock. Script may not work properly when screen is locked.")
@@ -153,7 +162,7 @@ logging.info(f"Created new tracking file: {filename}")
 
 # Main execution loop
 while running:
-    logging.info(f"Reading gps data using {provider_map[args.provider]} provider...")
+    logging.debug(f"Reading gps data using {provider_map[args.provider]} provider...")
 
     # Get location data
     result = get_location(provider_map[args.provider])
