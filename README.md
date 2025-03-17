@@ -12,3 +12,5 @@ Apps > Termux:API > Permissions > Location > Allow all the time
 ```
 
 It also acquires the wakelock at the beginning of the script in order to prevent it from shutting down.
+
+Otherwise, alternative: [GPSLogger](https://f-droid.org/en/packages/com.mendhak.gpslogger/). But seems like for now it's working properly :).
