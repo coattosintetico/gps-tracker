@@ -23,7 +23,7 @@ def setup_logging(geojson_file):
     
     # Set up logging configuration
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='[%(asctime)s] %(message)s',
         datefmt='%H:%M:%S',
         handlers=[
