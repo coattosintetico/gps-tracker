@@ -132,7 +132,6 @@ parser = argparse.ArgumentParser(description='GPS Data Reader')
 parser.add_argument('-t', '--time', type=int, default=60, help='Time interval in seconds')
 parser.add_argument('-p', '--provider', type=str, choices=['g', 'n', 'p'], default='n',
                     help='Location provider: g=gps, n=network, p=passive')
-parser.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
 args = parser.parse_args()
 
 # Map provider flag to termux-location provider argument
