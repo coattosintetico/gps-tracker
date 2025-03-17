@@ -81,28 +81,36 @@ def create_filename():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     return os.path.join(records_dir, f"{timestamp}.geojson")
 
-# Function to get location with timeout
-def get_location(provider, timeout=10):
+# Function to get location
+def get_location(provider):
     try:
-        # Run termux-location with timeout
-        result = subprocess.run(
+        start_time = time.time()
+        logging.debug(f"Starting location request with provider: {provider}")
+        
+        # Run termux-location without timeout
+        process = subprocess.Popen(
             ['termux-location', '-p', provider],
-            capture_output=True,
-            text=True,
-            timeout=timeout
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
         )
         
-        if result.returncode == 0:
-            return result.stdout
+        stdout, stderr = process.communicate()
+        elapsed_time = time.time() - start_time
+        
+        if process.returncode == 0 and stdout:
+            logging.debug(f"Location request completed in {elapsed_time:.2f} seconds")
+            return stdout
         else:
-            logging.error(f"Error getting location: {result.stderr}")
+            logging.error(f"Location request failed after {elapsed_time:.2f} seconds")
+            if stderr:
+                logging.error(f"Error output: {stderr}")
+            if stdout:
+                logging.debug(f"Command output: {stdout}")
             return None
             
-    except subprocess.TimeoutExpired:
-        logging.error(f"Location request timed out after {timeout} seconds")
-        return None
     except Exception as e:
-        logging.error(f"Error: {str(e)}")
+        logging.error(f"Error during location request: {str(e)}")
         return None
 
 # Setup argument parser
@@ -110,6 +118,7 @@ parser = argparse.ArgumentParser(description='GPS Data Reader')
 parser.add_argument('-t', '--time', type=int, default=60, help='Time interval in seconds')
 parser.add_argument('-p', '--provider', type=str, choices=['g', 'n', 'p'], default='n',
                     help='Location provider: g=gps, n=network, p=passive')
+parser.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
 args = parser.parse_args()
 
 # Map provider flag to termux-location provider argument
@@ -124,6 +133,11 @@ filename = create_filename()
 
 # Setup logging after we have the filename
 setup_logging(filename)
+
+# Set debug level if requested
+if args.debug:
+    logging.getLogger().setLevel(logging.DEBUG)
+    logging.debug("Debug logging enabled")
 
 # Acquire wakelock before starting
 if not acquire_wakelock():
@@ -141,7 +155,7 @@ logging.info(f"Created new tracking file: {filename}")
 while running:
     logging.info(f"Reading gps data using {provider_map[args.provider]} provider...")
 
-    # Get location data with timeout
+    # Get location data
     result = get_location(provider_map[args.provider])
     
     # Check if the running flag is still true
