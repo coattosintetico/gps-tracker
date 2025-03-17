@@ -1,0 +1,3 @@
+This repo will hold a python script that is going to be executed in an Android device through termux, and intends to fetch location each ~3 seconds or so with the termux-location command. 
+
+Keep it simple.
