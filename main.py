@@ -4,10 +4,37 @@ import time
 import argparse
 import threading
 import subprocess
+import atexit
 from datetime import datetime
 
 # Flag to control the execution of the script
 running = True
+
+def acquire_wakelock():
+    try:
+        result = subprocess.run(['termux-wake-lock'], capture_output=True, text=True)
+        if result.returncode == 0:
+            print(f"[{current_time_formatted()}] Wakelock acquired successfully")
+            return True
+        else:
+            print(f"[{current_time_formatted()}] Failed to acquire wakelock: {result.stderr}")
+            return False
+    except Exception as e:
+        print(f"[{current_time_formatted()}] Error acquiring wakelock: {str(e)}")
+        return False
+
+def release_wakelock():
+    try:
+        result = subprocess.run(['termux-wake-unlock'], capture_output=True, text=True)
+        if result.returncode == 0:
+            print(f"[{current_time_formatted()}] Wakelock released successfully")
+        else:
+            print(f"[{current_time_formatted()}] Failed to release wakelock: {result.stderr}")
+    except Exception as e:
+        print(f"[{current_time_formatted()}] Error releasing wakelock: {str(e)}")
+
+# Register wakelock release on script exit
+atexit.register(release_wakelock)
 
 # Function to handle keyboard input
 def keyboard_listener():
@@ -66,6 +93,10 @@ provider_map = {
     'n': 'network',
     'p': 'passive'
 }
+
+# Acquire wakelock before starting
+if not acquire_wakelock():
+    print(f"[{current_time_formatted()}] Warning: Could not acquire wakelock. Script may not work properly when screen is locked.")
 
 # Create a new GeoJSON file for each run
 filename = create_filename()
