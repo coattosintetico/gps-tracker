@@ -53,8 +53,14 @@ def current_time_formatted():
 
 # Function to create a filename with the current timestamp
 def create_filename():
+    # Create records directory if it doesn't exist
+    records_dir = "records"
+    if not os.path.exists(records_dir):
+        os.makedirs(records_dir)
+        print(f"[{current_time_formatted()}] Created records directory")
+    
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return f"{timestamp}.geojson"
+    return os.path.join(records_dir, f"{timestamp}.geojson")
 
 # Function to get location with timeout
 def get_location(provider, timeout=10):
@@ -104,6 +110,8 @@ with open(filename, 'w') as file:
     # Initialize an empty GeoJSON FeatureCollection
     feature_collection = geojson.FeatureCollection([])
     geojson.dump(feature_collection, file, indent=4)
+
+print(f"[{current_time_formatted()}] Created new tracking file: {filename}")
 
 # Main execution loop
 while running:
