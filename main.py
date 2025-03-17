@@ -5,33 +5,56 @@ import argparse
 import threading
 import subprocess
 import atexit
+import logging
 from datetime import datetime
 
 # Flag to control the execution of the script
 running = True
 
+def setup_logging(geojson_file):
+    # Create logs directory if it doesn't exist
+    logs_dir = "logs"
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+    
+    # Create log filename based on geojson filename
+    base_name = os.path.splitext(os.path.basename(geojson_file))[0]
+    log_file = os.path.join(logs_dir, f"{base_name}.log")
+    
+    # Set up logging configuration
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(asctime)s] %(message)s',
+        datefmt='%H:%M:%S',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+    logging.info(f"Logging initialized. Log file: {log_file}")
+
 def acquire_wakelock():
     try:
         result = subprocess.run(['termux-wake-lock'], capture_output=True, text=True)
         if result.returncode == 0:
-            print(f"[{current_time_formatted()}] Wakelock acquired successfully")
+            logging.info("Wakelock acquired successfully")
             return True
         else:
-            print(f"[{current_time_formatted()}] Failed to acquire wakelock: {result.stderr}")
+            logging.error(f"Failed to acquire wakelock: {result.stderr}")
             return False
     except Exception as e:
-        print(f"[{current_time_formatted()}] Error acquiring wakelock: {str(e)}")
+        logging.error(f"Error acquiring wakelock: {str(e)}")
         return False
 
 def release_wakelock():
     try:
         result = subprocess.run(['termux-wake-unlock'], capture_output=True, text=True)
         if result.returncode == 0:
-            print(f"[{current_time_formatted()}] Wakelock released successfully")
+            logging.info("Wakelock released successfully")
         else:
-            print(f"[{current_time_formatted()}] Failed to release wakelock: {result.stderr}")
+            logging.error(f"Failed to release wakelock: {result.stderr}")
     except Exception as e:
-        print(f"[{current_time_formatted()}] Error releasing wakelock: {str(e)}")
+        logging.error(f"Error releasing wakelock: {str(e)}")
 
 # Register wakelock release on script exit
 atexit.register(release_wakelock)
@@ -47,17 +70,13 @@ def keyboard_listener():
 keyboard_thread = threading.Thread(target=keyboard_listener)
 keyboard_thread.start()
 
-# Function to get the current time in a specific format
-def current_time_formatted():
-    return datetime.now().strftime("%H:%M:%S")
-
 # Function to create a filename with the current timestamp
 def create_filename():
     # Create records directory if it doesn't exist
     records_dir = "records"
     if not os.path.exists(records_dir):
         os.makedirs(records_dir)
-        print(f"[{current_time_formatted()}] Created records directory")
+        logging.info("Created records directory")
     
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     return os.path.join(records_dir, f"{timestamp}.geojson")
@@ -76,14 +95,14 @@ def get_location(provider, timeout=10):
         if result.returncode == 0:
             return result.stdout
         else:
-            print(f"[{current_time_formatted()}] Error getting location: {result.stderr}")
+            logging.error(f"Error getting location: {result.stderr}")
             return None
             
     except subprocess.TimeoutExpired:
-        print(f"[{current_time_formatted()}] Location request timed out after {timeout} seconds")
+        logging.error(f"Location request timed out after {timeout} seconds")
         return None
     except Exception as e:
-        print(f"[{current_time_formatted()}] Error: {str(e)}")
+        logging.error(f"Error: {str(e)}")
         return None
 
 # Setup argument parser
@@ -100,22 +119,27 @@ provider_map = {
     'p': 'passive'
 }
 
-# Acquire wakelock before starting
-if not acquire_wakelock():
-    print(f"[{current_time_formatted()}] Warning: Could not acquire wakelock. Script may not work properly when screen is locked.")
-
 # Create a new GeoJSON file for each run
 filename = create_filename()
+
+# Setup logging after we have the filename
+setup_logging(filename)
+
+# Acquire wakelock before starting
+if not acquire_wakelock():
+    logging.warning("Could not acquire wakelock. Script may not work properly when screen is locked.")
+
+# Initialize the GeoJSON file
 with open(filename, 'w') as file:
     # Initialize an empty GeoJSON FeatureCollection
     feature_collection = geojson.FeatureCollection([])
     geojson.dump(feature_collection, file, indent=4)
 
-print(f"[{current_time_formatted()}] Created new tracking file: {filename}")
+logging.info(f"Created new tracking file: {filename}")
 
 # Main execution loop
 while running:
-    print(f"[{current_time_formatted()}] Reading gps data using {provider_map[args.provider]} provider...")
+    logging.info(f"Reading gps data using {provider_map[args.provider]} provider...")
 
     # Get location data with timeout
     result = get_location(provider_map[args.provider])
@@ -126,7 +150,7 @@ while running:
         
     # If no result, skip this iteration
     if result is None:
-        print(f"[{current_time_formatted()}] Skipping this reading due to error")
+        logging.warning("Skipping this reading due to error")
         time.sleep(args.time)
         continue
 
@@ -134,8 +158,8 @@ while running:
     try:
         location_data = geojson.loads(result)
     except ValueError:
-        print(f"[{current_time_formatted()}] Error decoding JSON from termux-location")
-        print(result)
+        logging.error("Error decoding JSON from termux-location")
+        logging.debug(f"Raw output: {result}")
         time.sleep(args.time)
         continue
 
@@ -153,11 +177,11 @@ while running:
         geojson.dump(data, file, indent=4)
         file.truncate()
 
-    print(f"[{current_time_formatted()}] New record appended to {filename}")
+    logging.info(f"New record appended to {filename}")
 
     # Wait for the specified interval before the next iteration
     time.sleep(args.time)
 
 # Once the loop is exited, join the keyboard thread
 keyboard_thread.join()
-print("Script terminated gracefully.")
+logging.info("Script terminated gracefully.")
