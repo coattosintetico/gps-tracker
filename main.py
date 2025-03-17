@@ -3,6 +3,7 @@ import geojson
 import time
 import argparse
 import threading
+import subprocess
 from datetime import datetime
 
 # Flag to control the execution of the script
@@ -28,10 +29,43 @@ def create_filename():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     return f"{timestamp}.geojson"
 
+# Function to get location with timeout
+def get_location(provider, timeout=10):
+    try:
+        # Run termux-location with timeout
+        result = subprocess.run(
+            ['termux-location', '-p', provider],
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+        
+        if result.returncode == 0:
+            return result.stdout
+        else:
+            print(f"[{current_time_formatted()}] Error getting location: {result.stderr}")
+            return None
+            
+    except subprocess.TimeoutExpired:
+        print(f"[{current_time_formatted()}] Location request timed out after {timeout} seconds")
+        return None
+    except Exception as e:
+        print(f"[{current_time_formatted()}] Error: {str(e)}")
+        return None
+
 # Setup argument parser
 parser = argparse.ArgumentParser(description='GPS Data Reader')
 parser.add_argument('-t', '--time', type=int, default=60, help='Time interval in seconds')
+parser.add_argument('-p', '--provider', type=str, choices=['g', 'n', 'p'], default='n',
+                    help='Location provider: g=gps, n=network, p=passive')
 args = parser.parse_args()
+
+# Map provider flag to termux-location provider argument
+provider_map = {
+    'g': 'gps',
+    'n': 'network',
+    'p': 'passive'
+}
 
 # Create a new GeoJSON file for each run
 filename = create_filename()
@@ -42,14 +76,20 @@ with open(filename, 'w') as file:
 
 # Main execution loop
 while running:
-    print(f"[{current_time_formatted()}] Reading gps data...")
+    print(f"[{current_time_formatted()}] Reading gps data using {provider_map[args.provider]} provider...")
 
-    # Run termux-location and capture its output
-    result = os.popen('termux-location -p network').read()
-
+    # Get location data with timeout
+    result = get_location(provider_map[args.provider])
+    
     # Check if the running flag is still true
     if not running:
         break
+        
+    # If no result, skip this iteration
+    if result is None:
+        print(f"[{current_time_formatted()}] Skipping this reading due to error")
+        time.sleep(args.time)
+        continue
 
     # Parse the JSON output
     try:
@@ -57,11 +97,14 @@ while running:
     except ValueError:
         print(f"[{current_time_formatted()}] Error decoding JSON from termux-location")
         print(result)
+        time.sleep(args.time)
         continue
 
     # Create a GeoJSON feature
     feature = geojson.Feature(geometry=geojson.Point((location_data['longitude'], location_data['latitude'])),
-                              properties={"timestamp": int(time.time()), "additional_info": location_data})
+                              properties={"timestamp": int(time.time()), 
+                                        "provider": provider_map[args.provider],
+                                        "additional_info": location_data})
 
     # Read the existing GeoJSON file, append the new feature, and write back
     with open(filename, 'r+') as file:
